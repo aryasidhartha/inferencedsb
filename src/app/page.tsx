@@ -5,21 +5,22 @@ import {
   USE_CASE_PRESETS,
   UseCaseId,
   QuantizationType,
+  ServingEngineId,
+  PricingTierId,
+  FineTuneMode,
   WorkloadConfig,
   runFullMatrixSimulation,
   getQuantSpec,
-  SimulationResult,
+  SERVING_ENGINES,
 } from "@/lib/inference-engine";
 import { ParetoChart } from "@/components/ParetoChart";
 import { GpuDeepDivePanel } from "@/components/GpuDeepDivePanel";
+import { FutbinComparator } from "@/components/FutbinComparator";
 import {
   Cpu,
   Sliders,
   CheckCircle2,
   AlertCircle,
-  Trophy,
-  TrendingDown,
-  Award,
   Search,
   ArrowUpDown,
   MessageSquare,
@@ -28,6 +29,9 @@ import {
   Bot,
   Layers,
   Activity,
+  FileText,
+  Eye,
+  Server,
 } from "lucide-react";
 
 const USE_CASE_ICONS: Record<UseCaseId, React.ReactNode> = {
@@ -35,11 +39,14 @@ const USE_CASE_ICONS: Record<UseCaseId, React.ReactNode> = {
   rag: <Database className="w-3.5 h-3.5" />,
   coding: <Code2 className="w-3.5 h-3.5" />,
   agentic: <Bot className="w-3.5 h-3.5" />,
+  summarization: <FileText className="w-3.5 h-3.5" />,
   batch: <Layers className="w-3.5 h-3.5" />,
+  vision: <Eye className="w-3.5 h-3.5" />,
 };
 
 type SortField =
-  | "overallMatchScore"
+  | "futbinOvr"
+  | "costPerMillionBlendedTokens"
   | "costPerMillionOutputTokens"
   | "useCaseQualityScore"
   | "totalOutputTokPerSec"
@@ -50,18 +57,29 @@ export default function InferenceDashboardPage() {
   const [config, setConfig] = useState<WorkloadConfig>({
     useCaseId: "chatbot",
     promptTokens: USE_CASE_PRESETS.chatbot.promptTokens,
+    p95PromptTokens: USE_CASE_PRESETS.chatbot.p95PromptTokens,
     outputTokens: USE_CASE_PRESETS.chatbot.outputTokens,
+    p95OutputTokens: USE_CASE_PRESETS.chatbot.p95OutputTokens,
     concurrency: USE_CASE_PRESETS.chatbot.concurrency,
     targetTtftMs: USE_CASE_PRESETS.chatbot.targetTtftMs,
     targetTpotTokPerSec: USE_CASE_PRESETS.chatbot.targetTpotTokPerSec,
+    minQualityBar: USE_CASE_PRESETS.chatbot.minQualityBar,
     quantization: USE_CASE_PRESETS.chatbot.recommendedQuant,
+    servingEngine: USE_CASE_PRESETS.chatbot.recommendedEngine,
+    pricingTier: "ondemand",
+    fineTuneMode: "none",
+    prefixCacheHitRate: USE_CASE_PRESETS.chatbot.prefixCacheHitRate,
+    speculativeDecoding: false,
+    isOnlineWorkload: USE_CASE_PRESETS.chatbot.isOnlineWorkload,
+    trafficUtilizationPct: 80,
+    requireCommercialLicense: false,
     monthlyActiveHours: 730,
     maxBudgetPerHour: 15,
     allowMultiGpu: true,
   });
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState<SortField>("overallMatchScore");
+  const [sortField, setSortField] = useState<SortField>("futbinOvr");
   const [sortAsc, setSortAsc] = useState(false);
 
   const handleSelectUseCase = (useCaseId: UseCaseId) => {
@@ -70,11 +88,17 @@ export default function InferenceDashboardPage() {
       ...prev,
       useCaseId,
       promptTokens: preset.promptTokens,
+      p95PromptTokens: preset.p95PromptTokens,
       outputTokens: preset.outputTokens,
+      p95OutputTokens: preset.p95OutputTokens,
       concurrency: preset.concurrency,
       targetTtftMs: preset.targetTtftMs,
       targetTpotTokPerSec: preset.targetTpotTokPerSec,
+      minQualityBar: preset.minQualityBar,
       quantization: preset.recommendedQuant,
+      servingEngine: preset.recommendedEngine,
+      prefixCacheHitRate: preset.prefixCacheHitRate,
+      isOnlineWorkload: preset.isOnlineWorkload,
     }));
   };
 
@@ -96,16 +120,16 @@ export default function InferenceDashboardPage() {
 
     const lowestCostPool = [...pool].sort(
       (a, b) =>
-        a.economics.costPerMillionOutputTokens -
-        b.economics.costPerMillionOutputTokens
+        a.economics.costPerMillionBlendedTokens -
+        b.economics.costPerMillionBlendedTokens
     );
     const bestCostEfficiency = lowestCostPool[0] || bestOverall;
 
     const highestQualityPool = [...pool].sort(
       (a, b) =>
         b.scores.useCaseQualityScore - a.scores.useCaseQualityScore ||
-        a.economics.costPerMillionOutputTokens -
-          b.economics.costPerMillionOutputTokens
+        a.economics.costPerMillionBlendedTokens -
+          b.economics.costPerMillionBlendedTokens
     );
     const bestQuality = highestQualityPool[0] || bestOverall;
 
@@ -142,7 +166,8 @@ export default function InferenceDashboardPage() {
         r.model.name.toLowerCase().includes(q) ||
         r.gpu.name.toLowerCase().includes(q) ||
         r.model.provider.toLowerCase().includes(q) ||
-        r.gpu.architecture.toLowerCase().includes(q)
+        r.gpu.architecture.toLowerCase().includes(q) ||
+        r.futbin.tier.toLowerCase().includes(q)
       );
     });
 
@@ -150,9 +175,13 @@ export default function InferenceDashboardPage() {
       let valA = 0;
       let valB = 0;
       switch (sortField) {
-        case "overallMatchScore":
-          valA = a.scores.overallMatchScore;
-          valB = b.scores.overallMatchScore;
+        case "futbinOvr":
+          valA = a.futbin.ovr;
+          valB = b.futbin.ovr;
+          break;
+        case "costPerMillionBlendedTokens":
+          valA = a.economics.costPerMillionBlendedTokens;
+          valB = b.economics.costPerMillionBlendedTokens;
           break;
         case "costPerMillionOutputTokens":
           valA = a.economics.costPerMillionOutputTokens;
@@ -185,7 +214,8 @@ export default function InferenceDashboardPage() {
     } else {
       setSortField(field);
       setSortAsc(
-        field === "costPerMillionOutputTokens" ||
+        field === "costPerMillionBlendedTokens" ||
+          field === "costPerMillionOutputTokens" ||
           field === "ttftMs" ||
           field === "hourlyCostUsd"
       );
@@ -194,12 +224,13 @@ export default function InferenceDashboardPage() {
 
   const currentPreset = USE_CASE_PRESETS[config.useCaseId];
   const quantSpec = getQuantSpec(config.quantization);
+  const engineSpec = SERVING_ENGINES[config.servingEngine];
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col">
       {/* Top Navigation & Use-Case Bar */}
       <header className="sticky top-0 z-30 backdrop-blur-md bg-[#09090b]/90 border-b border-zinc-800/80 px-4 lg:px-8 py-3">
-        <div className="max-w-[1600px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+        <div className="max-w-[1640px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-700/80 flex items-center justify-center">
               <Cpu className="w-4 h-4 text-indigo-400" />
@@ -209,17 +240,17 @@ export default function InferenceDashboardPage() {
                 <h1 className="text-base font-semibold tracking-tight text-zinc-100">
                   InferenceAdvisor
                 </h1>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
-                  v2.6 Enterprise
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                  AA + FUTBIN v3.0
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Open-Source LLM Infrastructure Sizing & Roofline Cost-Efficiency Analyzer
+                4-Stage Pipeline: 1. Memory Filter → 2. Speed Roofline → 3. Input/Output Pricing → 4. FUTBIN OVR Ranker
               </p>
             </div>
           </div>
 
-          {/* Use-Case Selector Pills */}
+          {/* 7 Use-Case Selector Pills */}
           <div className="flex flex-wrap items-center gap-1 bg-zinc-900/90 p-1 rounded-lg border border-zinc-800/90">
             {(Object.keys(USE_CASE_PRESETS) as UseCaseId[]).map((id) => {
               const preset = USE_CASE_PRESETS[id];
@@ -228,7 +259,7 @@ export default function InferenceDashboardPage() {
                 <button
                   key={id}
                   onClick={() => handleSelectUseCase(id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                     active
                       ? "bg-indigo-600 text-white shadow-sm"
                       : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
@@ -244,67 +275,40 @@ export default function InferenceDashboardPage() {
       </header>
 
       {/* Main Content Layout */}
-      <main className="max-w-[1600px] w-full mx-auto px-4 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
-        {/* LEFT SIDEBAR: Workload & SLA Controls */}
+      <main className="max-w-[1640px] w-full mx-auto px-4 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+        {/* LEFT SIDEBAR: 4-Stage Pipeline Controls */}
         <aside className="lg:col-span-4 xl:col-span-3 flex flex-col gap-4">
-          <div className="bg-[#121215] border border-zinc-800/90 rounded-xl p-5 shadow-sm flex flex-col gap-5 sticky top-20">
-            <div className="border-b border-zinc-800/80 pb-3.5">
-              <div className="flex items-center gap-1.5 text-zinc-400 text-[11px] font-medium uppercase tracking-wider">
-                <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Workload Specification</span>
+          <div className="bg-[#121215] border border-zinc-800/90 rounded-xl p-5 shadow-sm flex flex-col gap-4 sticky top-20">
+            <div className="border-b border-zinc-800/80 pb-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-zinc-400 text-[11px] font-medium uppercase tracking-wider">
+                  <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>1. Workload Inputs</span>
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300">
+                  {config.isOnlineWorkload ? "Online (Latency)" : "Offline (Batch)"}
+                </span>
               </div>
               <h2 className="text-sm font-semibold text-zinc-100 mt-1">
                 {currentPreset.name}
               </h2>
-              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+              <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
                 {currentPreset.description}
               </p>
             </div>
 
-            {/* Capability Weights Bar */}
-            <div>
-              <div className="flex justify-between text-[11px] text-zinc-400 mb-1.5">
-                <span>Evaluation Benchmark Weights</span>
-                <span className="font-mono text-zinc-500">100%</span>
-              </div>
-              <div className="grid grid-cols-4 gap-1.5 text-[10px] font-mono text-center tabular-nums">
-                <div className="bg-[#09090b] border border-zinc-800/90 rounded p-1.5">
-                  <span className="text-zinc-500 block">General</span>
-                  <span className="text-zinc-200 font-semibold">
-                    {Math.round(currentPreset.capabilityWeights.general * 100)}%
-                  </span>
-                </div>
-                <div className="bg-[#09090b] border border-zinc-800/90 rounded p-1.5">
-                  <span className="text-zinc-500 block">Code</span>
-                  <span className="text-zinc-200 font-semibold">
-                    {Math.round(currentPreset.capabilityWeights.coding * 100)}%
-                  </span>
-                </div>
-                <div className="bg-[#09090b] border border-zinc-800/90 rounded p-1.5">
-                  <span className="text-zinc-500 block">Reason</span>
-                  <span className="text-zinc-200 font-semibold">
-                    {Math.round(currentPreset.capabilityWeights.reasoning * 100)}%
-                  </span>
-                </div>
-                <div className="bg-[#09090b] border border-zinc-800/90 rounded p-1.5">
-                  <span className="text-zinc-500 block">RAG</span>
-                  <span className="text-zinc-200 font-semibold">
-                    {Math.round(currentPreset.capabilityWeights.rag * 100)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Sliders */}
-            <div className="space-y-4">
-              {/* Input Prompt Length */}
+            {/* Token Shapes (Avg + p95) & Concurrency */}
+            <div className="space-y-3.5">
               <div>
-                <div className="flex justify-between text-xs mb-1.5">
+                <div className="flex justify-between text-xs mb-1">
                   <span className="text-zinc-300 font-medium">
-                    Avg Input Context
+                    Input Tokens (Avg / p95)
                   </span>
                   <span className="font-mono text-zinc-100 font-medium tabular-nums">
-                    {config.promptTokens.toLocaleString()} tokens
+                    {config.promptTokens.toLocaleString()}{" "}
+                    <span className="text-zinc-500 text-[11px]">
+                      (p95: {config.p95PromptTokens.toLocaleString()})
+                    </span>
                   </span>
                 </div>
                 <input
@@ -313,30 +317,28 @@ export default function InferenceDashboardPage() {
                   max={16384}
                   step={256}
                   value={config.promptTokens}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
                     setConfig({
                       ...config,
-                      promptTokens: Number(e.target.value),
-                    })
-                  }
+                      promptTokens: val,
+                      p95PromptTokens: val * 2,
+                    });
+                  }}
                   className="w-full cursor-pointer"
                 />
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>256</span>
-                  <span>4,096</span>
-                  <span>8,192</span>
-                  <span>16,384</span>
-                </div>
               </div>
 
-              {/* Output Generation Length */}
               <div>
-                <div className="flex justify-between text-xs mb-1.5">
+                <div className="flex justify-between text-xs mb-1">
                   <span className="text-zinc-300 font-medium">
-                    Avg Output Generation
+                    Output Tokens (Avg / p95)
                   </span>
                   <span className="font-mono text-zinc-100 font-medium tabular-nums">
-                    {config.outputTokens.toLocaleString()} tokens
+                    {config.outputTokens.toLocaleString()}{" "}
+                    <span className="text-zinc-500 text-[11px]">
+                      (p95: {config.p95OutputTokens.toLocaleString()})
+                    </span>
                   </span>
                 </div>
                 <input
@@ -345,27 +347,22 @@ export default function InferenceDashboardPage() {
                   max={4096}
                   step={64}
                   value={config.outputTokens}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
                     setConfig({
                       ...config,
-                      outputTokens: Number(e.target.value),
-                    })
-                  }
+                      outputTokens: val,
+                      p95OutputTokens: val * 2,
+                    });
+                  }}
                   className="w-full cursor-pointer"
                 />
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>64</span>
-                  <span>512</span>
-                  <span>2,048</span>
-                  <span>4,096</span>
-                </div>
               </div>
 
-              {/* Concurrent Active Users */}
               <div>
-                <div className="flex justify-between text-xs mb-1.5">
+                <div className="flex justify-between text-xs mb-1">
                   <span className="text-zinc-300 font-medium">
-                    Concurrent Active Streams
+                    Concurrent Users / Streams
                   </span>
                   <span className="font-mono text-zinc-100 font-medium tabular-nums">
                     {config.concurrency} streams
@@ -385,86 +382,173 @@ export default function InferenceDashboardPage() {
                   }
                   className="w-full cursor-pointer"
                 />
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>1</span>
-                  <span>16</span>
-                  <span>64</span>
-                  <span>128</span>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-zinc-300 font-medium">
+                    Prefix Cache Hit Rate
+                  </span>
+                  <span className="font-mono text-teal-400 font-medium tabular-nums">
+                    {Math.round(config.prefixCacheHitRate * 100)}% cached
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={0.85}
+                  step={0.05}
+                  value={config.prefixCacheHitRate}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      prefixCacheHitRate: Number(e.target.value),
+                    })
+                  }
+                  className="w-full cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Serving Stack & Quantization */}
+            <div className="pt-3 border-t border-zinc-800/80 space-y-3">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                <Server className="w-3.5 h-3.5 text-indigo-400" />
+                <span>2. Serving Stack & Precision</span>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-zinc-400 block mb-1">
+                  Inference Engine
+                </label>
+                <div className="grid grid-cols-4 gap-1">
+                  {(
+                    ["vllm", "sglang", "trtllm", "llamacpp"] as ServingEngineId[]
+                  ).map((eng) => (
+                    <button
+                      key={eng}
+                      onClick={() =>
+                        setConfig({ ...config, servingEngine: eng })
+                      }
+                      className={`py-1.5 px-1 rounded text-[11px] font-mono uppercase border transition-all ${
+                        config.servingEngine === eng
+                          ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 font-semibold"
+                          : "bg-[#09090b] border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {eng}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
+                  {engineSpec.description}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-zinc-400 block mb-1">
+                  Quantization Precision
+                </label>
+                <div className="grid grid-cols-5 gap-1">
+                  {(
+                    ["FP16", "FP8", "INT8", "INT4", "FP4"] as QuantizationType[]
+                  ).map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => setConfig({ ...config, quantization: q })}
+                      className={`py-1.5 px-1 rounded text-[11px] font-mono font-medium border transition-all ${
+                        config.quantization === q
+                          ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 font-semibold"
+                          : "bg-[#09090b] border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
+                  {quantSpec.description}
+                </p>
+              </div>
+
+              {/* Fine-Tune / LoRA Mode */}
+              <div>
+                <label className="text-[11px] text-zinc-400 block mb-1">
+                  Fine-Tuning / LoRA Adapter Memory
+                </label>
+                <div className="grid grid-cols-3 gap-1">
+                  {(
+                    [
+                      { id: "none", label: "Inference" },
+                      { id: "lora", label: "Multi-LoRA" },
+                      { id: "qlora", label: "QLoRA Dev" },
+                    ] as { id: FineTuneMode; label: string }[]
+                  ).map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() =>
+                        setConfig({ ...config, fineTuneMode: m.id })
+                      }
+                      className={`py-1 px-1.5 rounded text-[11px] font-medium border transition-all ${
+                        config.fineTuneMode === m.id
+                          ? "bg-zinc-800 border-zinc-600 text-zinc-100"
+                          : "bg-[#09090b] border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Quantization Selector */}
-            <div className="pt-3 border-t border-zinc-800/80">
-              <label className="text-xs font-medium text-zinc-300 block mb-2">
-                Weight & KV-Cache Precision
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(["FP16", "FP8", "INT4"] as QuantizationType[]).map((q) => (
+            {/* Pricing Tier, Traffic Utilization & SLOs */}
+            <div className="pt-3 border-t border-zinc-800/80 space-y-3">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                3. Pricing Tier & SLO Guardrails
+              </div>
+
+              <div className="grid grid-cols-3 gap-1">
+                {(
+                  [
+                    { id: "ondemand", label: "On-Demand" },
+                    { id: "reserved", label: "Reserved -30%" },
+                    { id: "spot", label: "Spot -45%" },
+                  ] as { id: PricingTierId; label: string }[]
+                ).map((t) => (
                   <button
-                    key={q}
-                    onClick={() => setConfig({ ...config, quantization: q })}
-                    className={`py-1.5 px-2 rounded-md text-xs font-mono font-medium border transition-all ${
-                      config.quantization === q
-                        ? "bg-indigo-600/15 border-indigo-500 text-indigo-300"
-                        : "bg-[#09090b] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                    key={t.id}
+                    onClick={() => setConfig({ ...config, pricingTier: t.id })}
+                    className={`py-1.5 px-1 rounded text-[11px] font-medium border transition-all ${
+                      config.pricingTier === t.id
+                        ? "bg-teal-500/15 border-teal-500/50 text-teal-300"
+                        : "bg-[#09090b] border-zinc-800 text-zinc-400 hover:text-zinc-200"
                     }`}
                   >
-                    {q}
+                    {t.label}
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-zinc-400 mt-2 leading-snug">
-                {quantSpec.description}
-              </p>
-            </div>
-
-            {/* Latency SLA & Budget Constraints */}
-            <div className="pt-3 border-t border-zinc-800/80 space-y-3.5">
-              <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                Service Level Objectives (SLOs)
-              </div>
 
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-zinc-400">Max Time to First Token</span>
+                  <span className="text-zinc-400">
+                    Traffic Utilization (Active vs Idle)
+                  </span>
                   <span className="font-mono text-zinc-200 tabular-nums">
-                    {config.targetTtftMs} ms
+                    {config.trafficUtilizationPct}%
                   </span>
                 </div>
                 <input
                   type="range"
-                  min={150}
-                  max={5000}
-                  step={50}
-                  value={config.targetTtftMs}
-                  onChange={(e) =>
-                    setConfig({
-                      ...config,
-                      targetTtftMs: Number(e.target.value),
-                    })
-                  }
-                  className="w-full cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-zinc-400">Min Per-User Decode Rate</span>
-                  <span className="font-mono text-zinc-200 tabular-nums">
-                    {config.targetTpotTokPerSec} tok/s
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={10}
+                  min={20}
                   max={100}
                   step={5}
-                  value={config.targetTpotTokPerSec}
+                  value={config.trafficUtilizationPct}
                   onChange={(e) =>
                     setConfig({
                       ...config,
-                      targetTpotTokPerSec: Number(e.target.value),
+                      trafficUtilizationPct: Number(e.target.value),
                     })
                   }
                   className="w-full cursor-pointer"
@@ -473,115 +557,141 @@ export default function InferenceDashboardPage() {
 
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-zinc-400">Hourly Compute Budget</span>
-                  <span className="font-mono text-zinc-200 tabular-nums">
-                    ${config.maxBudgetPerHour}/hr{" "}
-                    <span className="text-zinc-500">
-                      ($
-                      {Math.round(
-                        config.maxBudgetPerHour * config.monthlyActiveHours
-                      ).toLocaleString()}
-                      /mo)
-                    </span>
+                  <span className="text-zinc-400">Min Quality Bar (0–100)</span>
+                  <span className="font-mono text-indigo-300 tabular-nums">
+                    {config.minQualityBar} pts
                   </span>
                 </div>
                 <input
                   type="range"
-                  min={1}
-                  max={35}
-                  step={0.5}
-                  value={config.maxBudgetPerHour}
+                  min={45}
+                  max={88}
+                  step={1}
+                  value={config.minQualityBar}
                   onChange={(e) =>
                     setConfig({
                       ...config,
-                      maxBudgetPerHour: Number(e.target.value),
+                      minQualityBar: Number(e.target.value),
                     })
                   }
                   className="w-full cursor-pointer"
                 />
               </div>
 
-              <label className="flex items-center justify-between pt-1 text-xs text-zinc-300 cursor-pointer">
-                <span>Multi-GPU Tensor Parallelism</span>
-                <input
-                  type="checkbox"
-                  checked={config.allowMultiGpu}
-                  onChange={(e) =>
-                    setConfig({ ...config, allowMultiGpu: e.target.checked })
-                  }
-                  className="rounded border-zinc-700 bg-zinc-950 text-indigo-600 focus:ring-0"
-                />
-              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-zinc-400">Max TTFT</span>
+                    <span className="font-mono text-zinc-200">
+                      {config.targetTtftMs}ms
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={150}
+                    max={5000}
+                    step={50}
+                    value={config.targetTtftMs}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        targetTtftMs: Number(e.target.value),
+                      })
+                    }
+                    className="w-full cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-zinc-400">Min Stream</span>
+                    <span className="font-mono text-zinc-200">
+                      {config.targetTpotTokPerSec} tok/s
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={10}
+                    max={100}
+                    step={5}
+                    value={config.targetTpotTokPerSec}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        targetTpotTokPerSec: Number(e.target.value),
+                      })
+                    }
+                    className="w-full cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-1 space-y-1.5">
+                <label className="flex items-center justify-between text-xs text-zinc-300 cursor-pointer">
+                  <span>Speculative Decoding (N-gram / Medusa)</span>
+                  <input
+                    type="checkbox"
+                    checked={config.speculativeDecoding}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        speculativeDecoding: e.target.checked,
+                      })
+                    }
+                    className="rounded border-zinc-700 bg-zinc-950 text-indigo-600 focus:ring-0"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between text-xs text-zinc-300 cursor-pointer">
+                  <span>Allow Multi-GPU Tensor Parallelism</span>
+                  <input
+                    type="checkbox"
+                    checked={config.allowMultiGpu}
+                    onChange={(e) =>
+                      setConfig({ ...config, allowMultiGpu: e.target.checked })
+                    }
+                    className="rounded border-zinc-700 bg-zinc-950 text-indigo-600 focus:ring-0"
+                  />
+                </label>
+              </div>
             </div>
           </div>
         </aside>
 
         {/* RIGHT MAIN CONTENT */}
         <section className="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
-          {/* TOP 3 HERO RECOMMENDATION CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {recommendations.bestOverall && (
-              <RecommendationHeroCard
-                badge="Primary Recommendation"
-                badgeIcon={<Trophy className="w-3.5 h-3.5 text-indigo-400" />}
-                isPrimary
-                result={recommendations.bestOverall}
-                isSelected={selectedResult?.id === recommendations.bestOverall.id}
-                onSelect={() => setSelectedId(recommendations.bestOverall.id)}
-              />
-            )}
+          {/* 1. FUTBIN HARDWARE × MODEL META CARDS & 1v1 VERSUS ARENA */}
+          <FutbinComparator
+            results={simulationResults}
+            selectedId={selectedResult?.id || ""}
+            onSelect={(r) => setSelectedId(r.id)}
+            recommendations={recommendations}
+          />
 
-            {recommendations.bestCostEfficiency && (
-              <RecommendationHeroCard
-                badge="Lowest Unit Cost ($/1M)"
-                badgeIcon={
-                  <TrendingDown className="w-3.5 h-3.5 text-teal-400" />
-                }
-                result={recommendations.bestCostEfficiency}
-                isSelected={
-                  selectedResult?.id === recommendations.bestCostEfficiency.id
-                }
-                onSelect={() =>
-                  setSelectedId(recommendations.bestCostEfficiency.id)
-                }
-              />
-            )}
-
-            {recommendations.bestQuality && (
-              <RecommendationHeroCard
-                badge="Highest Benchmark Quality"
-                badgeIcon={<Award className="w-3.5 h-3.5 text-slate-300" />}
-                result={recommendations.bestQuality}
-                isSelected={selectedResult?.id === recommendations.bestQuality.id}
-                onSelect={() => setSelectedId(recommendations.bestQuality.id)}
-              />
-            )}
-          </div>
-
-          {/* PARETO FRONTIER INTERACTIVE CHART */}
+          {/* 2. ARTIFICIAL ANALYSIS 4-QUADRANT & 3-PILLAR BAR CHARTS */}
           <ParetoChart
             results={simulationResults}
             selectedId={selectedResult?.id || ""}
             onSelect={(r) => setSelectedId(r.id)}
             targetTtftMs={config.targetTtftMs}
             targetTpotTokPerSec={config.targetTpotTokPerSec}
+            minQualityBar={config.minQualityBar}
           />
 
-          {/* DEEP-DIVE HARDWARE & MODEL INSPECTOR */}
+          {/* 3. 4-STAGE PIPELINE DEEP-DIVE HARDWARE & MODEL INSPECTOR */}
           {selectedResult && (
             <GpuDeepDivePanel selected={selectedResult} config={config} />
           )}
 
-          {/* FULL SIMULATION LEADERBOARD TABLE */}
+          {/* 4. FULL SIMULATION LEADERBOARD TABLE */}
           <div className="bg-[#121215] border border-zinc-800/90 rounded-xl p-5 shadow-sm flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2 tracking-tight">
                   <Activity className="w-4 h-4 text-indigo-400" />
-                  Hardware × Model Evaluation Matrix
+                  Complete Hardware × LLM Evaluation Matrix
                 </h2>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  Showing {filteredTableResults.length} valid configurations ranked by composite efficiency and SLA compliance.
+                  Showing {filteredTableResults.length} memory-feasible configurations ranked by SLO compliance, FUTBIN OVR, and Blended $/1M token price.
                 </p>
               </div>
 
@@ -589,7 +699,7 @@ export default function InferenceDashboardPage() {
                 <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Filter model or GPU (e.g. H100, Qwen)..."
+                  placeholder="Filter model, GPU, or tier (e.g. TOTY)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-[#09090b] border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 transition-colors"
@@ -601,11 +711,19 @@ export default function InferenceDashboardPage() {
               <table className="w-full text-left border-collapse text-xs tabular-nums">
                 <thead>
                   <tr className="border-b border-zinc-800 text-zinc-400 font-medium text-[11px] uppercase tracking-wider">
-                    <th className="py-2.5 px-3">Model</th>
-                    <th className="py-2.5 px-3">GPU Topology</th>
-                    <th className="py-2.5 px-3">VRAM Footprint</th>
                     <th
-                      className="py-2.5 px-3 cursor-pointer hover:text-zinc-100"
+                      className="py-2.5 px-2.5 cursor-pointer hover:text-zinc-100"
+                      onClick={() => toggleSort("futbinOvr")}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        OVR <ArrowUpDown className="w-3 h-3" />
+                      </span>
+                    </th>
+                    <th className="py-2.5 px-2.5">Model & Architecture</th>
+                    <th className="py-2.5 px-2.5">Apt GPU Config</th>
+                    <th className="py-2.5 px-2.5">VRAM & Max Users</th>
+                    <th
+                      className="py-2.5 px-2.5 cursor-pointer hover:text-zinc-100"
                       onClick={() => toggleSort("useCaseQualityScore")}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -613,49 +731,33 @@ export default function InferenceDashboardPage() {
                       </span>
                     </th>
                     <th
-                      className="py-2.5 px-3 cursor-pointer hover:text-zinc-100"
-                      onClick={() => toggleSort("totalOutputTokPerSec")}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        Throughput <ArrowUpDown className="w-3 h-3" />
-                      </span>
-                    </th>
-                    <th
-                      className="py-2.5 px-3 cursor-pointer hover:text-zinc-100"
+                      className="py-2.5 px-2.5 cursor-pointer hover:text-zinc-100"
                       onClick={() => toggleSort("ttftMs")}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Latency SLO <ArrowUpDown className="w-3 h-3" />
+                        TTFT / Stream <ArrowUpDown className="w-3 h-3" />
                       </span>
                     </th>
                     <th
-                      className="py-2.5 px-3 cursor-pointer hover:text-zinc-100"
+                      className="py-2.5 px-2.5 cursor-pointer hover:text-zinc-100"
+                      onClick={() => toggleSort("costPerMillionBlendedTokens")}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        Blended $/1M <ArrowUpDown className="w-3 h-3" />
+                      </span>
+                    </th>
+                    <th
+                      className="py-2.5 px-2.5 text-right cursor-pointer hover:text-zinc-100"
                       onClick={() => toggleSort("hourlyCostUsd")}
                     >
-                      <span className="inline-flex items-center gap-1">
-                        Hourly <ArrowUpDown className="w-3 h-3" />
-                      </span>
-                    </th>
-                    <th
-                      className="py-2.5 px-3 cursor-pointer hover:text-zinc-100"
-                      onClick={() => toggleSort("costPerMillionOutputTokens")}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        $/1M Tok <ArrowUpDown className="w-3 h-3" />
-                      </span>
-                    </th>
-                    <th
-                      className="py-2.5 px-3 text-right cursor-pointer hover:text-zinc-100"
-                      onClick={() => toggleSort("overallMatchScore")}
-                    >
                       <span className="inline-flex items-center gap-1 justify-end">
-                        Fit Index <ArrowUpDown className="w-3 h-3" />
+                        $/Hr <ArrowUpDown className="w-3 h-3" />
                       </span>
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
-                  {filteredTableResults.slice(0, 25).map((r) => {
+                  {filteredTableResults.slice(0, 28).map((r) => {
                     const isSelected = selectedResult?.id === r.id;
                     return (
                       <tr
@@ -667,39 +769,59 @@ export default function InferenceDashboardPage() {
                             : "hover:bg-zinc-900/70"
                         }`}
                       >
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-2.5 font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`px-2 py-0.5 rounded font-bold text-xs border ${
+                                r.futbin.ovr >= 90
+                                  ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                                  : r.futbin.ovr >= 84
+                                  ? "bg-teal-500/15 text-teal-300 border-teal-500/35"
+                                  : "bg-zinc-800 text-zinc-200 border-zinc-700"
+                              }`}
+                            >
+                              {r.futbin.ovr}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 hidden xl:inline">
+                              {r.futbin.tier}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-2.5">
                           <div className="font-medium text-zinc-100 flex items-center gap-1.5">
-                            <span>{r.model.name}</span>
+                            <span>{r.model.shortName}</span>
                             {r.isParetoOptimalCostQuality && (
-                              <span
-                                title="Pareto Optimal on Cost vs Quality Frontier"
-                                className="px-1.5 py-0.2 text-[10px] rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 font-mono"
-                              >
+                              <span className="px-1.5 py-0.2 text-[10px] rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 font-mono">
                                 Pareto
                               </span>
                             )}
                           </div>
                           <div className="text-[11px] text-zinc-500">
-                            {r.model.totalParamsB}B · {r.quantization} · {r.model.license}
+                            {r.model.architecture} ({r.model.activeParamsB}B) ·{" "}
+                            {r.quantization} · {r.model.license}
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-2.5">
                           <div className="font-medium text-zinc-200">
-                            {r.gpuCount}x {r.gpu.name}
+                            {r.gpuCount}x {r.gpu.shortName}
                           </div>
                           <div className="text-[11px] text-zinc-500 font-mono">
-                            {r.vramBreakdown.totalAvailableGb}GB {r.gpu.memoryType} ·{" "}
-                            {r.gpu.memoryBandwidthGbPerSec * r.gpuCount} GB/s
+                            {r.gpu.memoryBandwidthGbPerSec * r.gpuCount} GB/s ·{" "}
+                            {r.confidenceLevel === "Measured Benchmark"
+                              ? "Measured"
+                              : "Roofline"}
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-3 font-mono">
+                        <td className="py-2.5 px-2.5 font-mono">
                           <div className="text-zinc-300">
-                            {r.vramBreakdown.totalRequiredGb} /{" "}
-                            {r.vramBreakdown.totalAvailableGb} GB
+                            {r.vramBreakdown.totalRequiredGb}/
+                            {r.vramBreakdown.totalAvailableGb}GB (
+                            {r.performance.maxConcurrentUsersWithinSlo}u SLO)
                           </div>
-                          <div className="w-20 h-1 bg-zinc-800 rounded-full overflow-hidden mt-1">
+                          <div className="w-24 h-1 bg-zinc-800 rounded-full overflow-hidden mt-1">
                             <div
                               className={`h-full rounded-full ${
                                 r.vramBreakdown.utilizationPct > 85
@@ -713,18 +835,20 @@ export default function InferenceDashboardPage() {
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-3 font-mono">
-                          <span className="text-zinc-100 font-medium">
+                        <td className="py-2.5 px-2.5 font-mono">
+                          <span
+                            className={`font-medium ${
+                              r.scores.meetsQualityBar
+                                ? "text-zinc-100"
+                                : "text-amber-400"
+                            }`}
+                          >
                             {r.scores.useCaseQualityScore}
                           </span>
                           <span className="text-zinc-500">/100</span>
                         </td>
 
-                        <td className="py-2.5 px-3 font-mono text-zinc-200">
-                          {r.performance.totalOutputTokPerSec.toLocaleString()} tok/s
-                        </td>
-
-                        <td className="py-2.5 px-3 font-mono">
+                        <td className="py-2.5 px-2.5 font-mono">
                           <div className="flex items-center gap-1.5">
                             {r.scores.meetsAllSlas ? (
                               <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
@@ -736,26 +860,26 @@ export default function InferenceDashboardPage() {
                                 {r.performance.ttftMs}ms TTFT
                               </div>
                               <div className="text-[11px] text-zinc-500">
-                                {r.performance.tpotTokPerSec} tok/s/user
+                                {r.performance.tpotTokPerSec} tok/s (
+                                {r.performance.itlMs}ms ITL)
                               </div>
                             </div>
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-3 font-mono text-zinc-300">
+                        <td className="py-2.5 px-2.5 font-mono">
+                          <div className="text-teal-400 font-semibold">
+                            ${r.economics.costPerMillionBlendedTokens.toFixed(2)}
+                          </div>
+                          <div className="text-[10px] text-zinc-500">
+                            In: ${r.economics.costPerMillionInputTokens.toFixed(2)}{" "}
+                            · Out: $
+                            {r.economics.costPerMillionOutputTokens.toFixed(2)}
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-2.5 text-right font-mono text-zinc-200">
                           ${r.economics.hourlyCostUsd.toFixed(2)}/hr
-                        </td>
-
-                        <td className="py-2.5 px-3 font-mono">
-                          <span className="text-teal-400 font-medium">
-                            ${r.economics.costPerMillionOutputTokens.toFixed(3)}
-                          </span>
-                        </td>
-
-                        <td className="py-2.5 px-3 text-right font-mono">
-                          <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-100 font-semibold border border-zinc-700/80">
-                            {r.scores.overallMatchScore}
-                          </span>
                         </td>
                       </tr>
                     );
@@ -766,80 +890,6 @@ export default function InferenceDashboardPage() {
           </div>
         </section>
       </main>
-    </div>
-  );
-}
-
-interface RecommendationHeroCardProps {
-  badge: string;
-  badgeIcon: React.ReactNode;
-  isPrimary?: boolean;
-  result: SimulationResult;
-  isSelected: boolean;
-  onSelect: () => void;
-}
-
-function RecommendationHeroCard({
-  badge,
-  badgeIcon,
-  isPrimary,
-  result,
-  isSelected,
-  onSelect,
-}: RecommendationHeroCardProps) {
-  return (
-    <div
-      onClick={onSelect}
-      className={`cursor-pointer rounded-xl p-4 bg-[#121215] border transition-all duration-150 ${
-        isSelected
-          ? "border-indigo-500 ring-1 ring-indigo-500/50 bg-zinc-900/90"
-          : isPrimary
-          ? "border-zinc-700/90 hover:border-zinc-600"
-          : "border-zinc-800/90 hover:border-zinc-700"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-2.5">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-          {badgeIcon}
-          {badge}
-        </span>
-        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-[#09090b] text-zinc-200 border border-zinc-800 tabular-nums">
-          Index {result.scores.overallMatchScore}
-        </span>
-      </div>
-
-      <h3 className="text-sm font-semibold text-zinc-100 truncate">
-        {result.model.name}
-      </h3>
-      <div className="text-xs text-indigo-300 mt-0.5 flex items-center justify-between">
-        <span>
-          {result.gpuCount}x {result.gpu.name} ({result.vramBreakdown.totalAvailableGb}GB)
-        </span>
-        <span className="font-mono text-[11px] text-zinc-500">
-          {result.quantization}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 mt-3.5 pt-3 border-t border-zinc-800/80 text-xs tabular-nums">
-        <div>
-          <span className="text-[10px] text-zinc-500 block">Unit Cost</span>
-          <span className="font-mono font-semibold text-teal-400">
-            ${result.economics.costPerMillionOutputTokens.toFixed(3)}
-          </span>
-        </div>
-        <div>
-          <span className="text-[10px] text-zinc-500 block">Output Rate</span>
-          <span className="font-mono font-medium text-zinc-200">
-            {result.performance.totalOutputTokPerSec} tok/s
-          </span>
-        </div>
-        <div>
-          <span className="text-[10px] text-zinc-500 block">Hourly Rate</span>
-          <span className="font-mono font-medium text-zinc-200">
-            ${result.economics.hourlyCostUsd.toFixed(2)}/hr
-          </span>
-        </div>
-      </div>
     </div>
   );
 }
