@@ -67,9 +67,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-radius: 3px;
 }
 
+
 /* =====================================================================
-   Loading splash: a GPU chip whose cores light up while the "AI thinks"
-   (see src/components/SplashScreen.tsx)
+   Loading splash: a small GPU-chip mark whose cores light up in turn,
+   beside the wordmark (see src/components/SplashScreen.tsx)
    ===================================================================== */
 .splash-root {
   position: fixed;
@@ -88,103 +89,59 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .splash-inner {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 28px;
+  gap: 18px;
   padding: 0 24px;
-  animation: splash-rise 0.6s ease both;
+  animation: splash-rise 0.5s ease both;
 }
 
-.splash-chip {
-  width: 132px;
-  height: 132px;
-  overflow: visible;
+.splash-mark {
+  width: 72px;
+  height: 72px;
 }
 
-.splash-chip-body {
-  fill: #ffffff;
+.splash-body {
+  fill: #0a0a0a;
   stroke: #0a0a0a;
-  stroke-width: 1.5;
-}
-.splash-chip-die {
-  fill: #fafafa;
-  stroke: #d4d4d8;
-  stroke-width: 1;
+  stroke-width: 2;
 }
 .splash-pin {
   stroke: #0a0a0a;
-  stroke-width: 1.5;
+  stroke-width: 2;
   stroke-linecap: round;
 }
 
-/* Each core pulses; the delay is set per core so a wave sweeps diagonally. */
+/* Cores light up clockwise, one after another (delay set per core). */
 .splash-core {
-  fill: #2563eb;
-  opacity: 0.12;
-  animation: splash-core 1.4s ease-in-out infinite;
+  fill: #ffffff;
+  opacity: 0.15;
+  animation: splash-core 1s steps(4, end) infinite;
 }
 
-/* Memory-bandwidth style bars under the chip */
-.splash-mem {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 18px;
-}
-.splash-mem span {
-  width: 4px;
-  height: 100%;
-  background: #0a0a0a;
-  border-radius: 1px;
-  transform-origin: bottom;
-  animation: splash-mem 1s ease-in-out infinite;
-}
-
-.splash-title {
-  font-family: var(--font-sans), system-ui, sans-serif;
+.splash-word {
+  font-family: var(--font-mono), ui-monospace, "Courier New", monospace;
   font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-weight: 300;
+  letter-spacing: 0.01em;
   color: #0a0a0a;
-  text-align: center;
-}
-
-.splash-status {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 13px;
-  color: #52525b;
-  margin-top: 8px;
-  height: 18px;
-  text-align: center;
-}
-.splash-cursor {
-  display: inline-block;
-  width: 7px;
-  height: 14px;
-  margin-left: 3px;
-  vertical-align: -2px;
-  background: #2563eb;
-  animation: splash-blink 0.9s steps(1) infinite;
+  white-space: nowrap;
 }
 
 @keyframes splash-rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes splash-core {
-  0%, 100% { opacity: 0.12; }
-  40% { opacity: 1; }
+  0%, 100% { opacity: 0.15; }
+  25% { opacity: 1; }
+  50% { opacity: 0.15; }
 }
-@keyframes splash-mem {
-  0%, 100% { transform: scaleY(0.25); }
-  50% { transform: scaleY(1); }
-}
-@keyframes splash-blink {
-  50% { opacity: 0; }
+
+@media (max-width: 480px) {
+  .splash-inner { flex-direction: column; gap: 12px; }
+  .splash-word { font-size: 19px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .splash-core { animation: none; opacity: 0.7; }
-  .splash-mem span { animation: none; transform: scaleY(0.6); }
-  .splash-cursor { animation: none; }
 }

@@ -13,6 +13,7 @@ import {
   getQualityBarDescription,
   buildDeployCli,
 } from "@/lib/inference-engine";
+import { Logo } from "@/components/Logo";
 import {
   Check,
   Copy,
@@ -477,7 +478,10 @@ export default function InferenceDashboardPage() {
     <div className="min-h-screen flex flex-col bg-white text-[#0a0a0a]">
       <header className="px-4 sm:px-6 py-5">
         <div className="max-w-[720px] mx-auto flex items-center justify-between">
-          <span className="font-mono text-sm font-medium tracking-tight">inferenceadvisor</span>
+          <span className="flex items-center gap-2">
+            <Logo size={24} />
+            <span className="font-mono text-sm font-light tracking-tight">inferenceadvisor</span>
+          </span>
           <span className="text-xs text-zinc-500">Free · no sign-up</span>
         </div>
       </header>
