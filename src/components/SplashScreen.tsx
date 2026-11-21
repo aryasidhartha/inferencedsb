@@ -3,37 +3,35 @@
 import { useEffect, useState } from "react";
 
 /**
- * Full-screen loading animation: one cube (your app) fans out to three cubes
- * (GPUs). It is rendered on the server too, so it appears instantly while the
- * rest of the site is still loading, then fades away once the page is ready.
+ * Full-screen loading animation: a GPU chip whose cores light up in a wave
+ * (the AI "thinking") with a status line that types what we're working out.
+ * It is rendered on the server too, so it shows instantly while the rest of
+ * the site loads, then fades away once the page is ready.
  *
- * To change how long it stays: edit SHOW_MS. To restyle: see ".splash-*" in globals.css.
+ * Timing: edit SHOW_MS. Look and feel: see ".splash-*" in globals.css.
  */
-const SHOW_MS = 1700;
+const SHOW_MS = 2200;
 const FADE_MS = 650;
 
-// Isometric cube centred on (cx, cy) with radius s.
-function Cube({ cx, cy, s, cls, dot }: { cx: number; cy: number; s: number; cls: string; dot?: boolean }) {
-  const w = s * 0.866;
-  const h = s * 0.5;
-  const top = `${cx},${cy - s}`;
-  const ur = `${cx + w},${cy - h}`;
-  const lr = `${cx + w},${cy + h}`;
-  const bot = `${cx},${cy + s}`;
-  const ll = `${cx - w},${cy + h}`;
-  const ul = `${cx - w},${cy - h}`;
-  return (
-    <g className={`splash-cube ${cls}`}>
-      <polygon className="splash-stroke" points={`${top} ${ur} ${lr} ${bot} ${ll} ${ul}`} />
-      <polyline className="splash-stroke" points={`${ul} ${cx},${cy} ${ur}`} />
-      <line className="splash-stroke" x1={cx} y1={cy} x2={cx} y2={cy + s} />
-      {dot && <ellipse className="splash-stroke" cx={cx} cy={cy - h} rx={s * 0.22} ry={s * 0.12} />}
-    </g>
-  );
-}
+const MESSAGES = [
+  "Checking GPU memory",
+  "Estimating response speed",
+  "Comparing prices",
+  "Picking your best setup",
+];
+
+const GRID = 4; // 4x4 cores
+const CORE = 11;
+const GAP = 4;
+const DIE = GRID * CORE + (GRID + 1) * GAP; // inner die size
+const PAD = 22; // distance from chip edge to die
+const SIZE = DIE + PAD * 2;
+const PINS = 6;
 
 export function SplashScreen() {
   const [phase, setPhase] = useState<"show" | "fade" | "gone">("show");
+  const [msg, setMsg] = useState(0);
+  const [chars, setChars] = useState(0);
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("fade"), SHOW_MS);
@@ -44,37 +42,77 @@ export function SplashScreen() {
     };
   }, []);
 
+  // Type the current message, then move on to the next one.
+  useEffect(() => {
+    const full = MESSAGES[msg].length;
+    if (chars < full) {
+      const t = setTimeout(() => setChars((c) => c + 1), 28);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => {
+      setMsg((m) => (m + 1) % MESSAGES.length);
+      setChars(0);
+    }, 260);
+    return () => clearTimeout(t);
+  }, [msg, chars]);
+
   if (phase === "gone") return null;
 
-  const paths = [
-    "M 62 70 L 112 30",
-    "M 62 70 L 128 70",
-    "M 62 70 L 112 110",
-  ];
+  const cores: { x: number; y: number; delay: number }[] = [];
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      cores.push({
+        x: PAD + GAP + c * (CORE + GAP),
+        y: PAD + GAP + r * (CORE + GAP),
+        delay: (r + c) * 0.14,
+      });
+    }
+  }
+
+  const pinPositions = Array.from({ length: PINS }, (_, i) => PAD + ((i + 0.5) * DIE) / PINS);
 
   return (
     <div className="splash-root" data-phase={phase} role="status" aria-label="Loading InferenceAdvisor">
       <div className="splash-inner">
-        <svg className="splash-logo" viewBox="0 0 170 140" aria-hidden="true">
-          {paths.map((d, i) => (
-            <path key={d} className="splash-line" d={d} style={{ animationDelay: `${0.3 + i * 0.12}s` }} />
+        <svg className="splash-chip" viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
+          {pinPositions.map((p) => (
+            <g key={p}>
+              <line className="splash-pin" x1={p} y1={0} x2={p} y2={PAD - 6} />
+              <line className="splash-pin" x1={p} y1={SIZE} x2={p} y2={SIZE - PAD + 6} />
+              <line className="splash-pin" x1={0} y1={p} x2={PAD - 6} y2={p} />
+              <line className="splash-pin" x1={SIZE} y1={p} x2={SIZE - PAD + 6} y2={p} />
+            </g>
           ))}
-          {paths.map((d, i) => (
-            <circle key={`dot-${d}`} className="splash-dot" r="2.4">
-              <animateMotion dur="1.4s" begin={`${0.9 + i * 0.25}s`} repeatCount="indefinite" path={d} />
-            </circle>
+          <rect className="splash-chip-body" x={PAD - 6} y={PAD - 6} width={DIE + 12} height={DIE + 12} rx={8} />
+          <rect className="splash-chip-die" x={PAD} y={PAD} width={DIE} height={DIE} rx={4} />
+          {cores.map((c, i) => (
+            <rect
+              key={i}
+              className="splash-core"
+              x={c.x}
+              y={c.y}
+              width={CORE}
+              height={CORE}
+              rx={2}
+              style={{ animationDelay: `${c.delay}s` }}
+            />
           ))}
-          <Cube cx={40} cy={70} s={22} cls="c0" dot />
-          <Cube cx={128} cy={30} s={16} cls="c1" />
-          <Cube cx={146} cy={70} s={16} cls="c2" />
-          <Cube cx={128} cy={110} s={16} cls="c3" />
         </svg>
-        <div className="splash-word">
-          <span>inferenceadvisor</span>
-          <span className="splash-beta">BETA</span>
+
+        <div className="splash-mem" aria-hidden="true">
+          {Array.from({ length: 14 }, (_, i) => (
+            <span key={i} style={{ animationDelay: `${(i % 7) * 0.11}s` }} />
+          ))}
+        </div>
+
+        <div>
+          <div className="splash-title">InferenceAdvisor</div>
+          <div className="splash-status">
+            {MESSAGES[msg].slice(0, chars)}
+            <span className="splash-cursor" />
+          </div>
         </div>
       </div>
-      <div className="splash-bar" aria-hidden="true" />
     </div>
   );
 }
