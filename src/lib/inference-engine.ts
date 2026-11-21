@@ -270,9 +270,9 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
   chatbot: {
     id: "chatbot",
     name: "Interactive Chat & Customer Assistant",
-    shortName: "Chat Assistant",
+    shortName: "Chatbot",
     description:
-      "Online conversational UI requiring sub-500ms TTFT and smooth 35+ tok/s streaming (~28ms ITL) with shared system prompt caching.",
+      "Fast conversational replies for customer support or internal assistants.",
     promptTokens: 1024,
     p95PromptTokens: 2048,
     outputTokens: 384,
@@ -280,7 +280,7 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     concurrency: 16,
     targetTtftMs: 500,
     targetTpotTokPerSec: 35,
-    minQualityBar: 62,
+    minQualityBar: 64,
     prefixCacheHitRate: 0.35,
     isOnlineWorkload: true,
     recommendedQuant: "FP8",
@@ -294,10 +294,10 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
   },
   rag: {
     id: "rag",
-    name: "Enterprise RAG & Long-Context Q&A",
-    shortName: "Enterprise RAG",
+    name: "Document Q&A (RAG)",
+    shortName: "Document Q&A (RAG)",
     description:
-      "Prefill-heavy workload (6K avg / 12K p95 input tokens, short output) where compute TFLOPS, prefix caching, and GQA/MLA KV size dominate.",
+      "Answer questions grounded in long uploaded PDFs, wikis, or knowledge bases.",
     promptTokens: 6144,
     p95PromptTokens: 12288,
     outputTokens: 512,
@@ -305,7 +305,7 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     concurrency: 12,
     targetTtftMs: 1200,
     targetTpotTokPerSec: 25,
-    minQualityBar: 70,
+    minQualityBar: 72,
     prefixCacheHitRate: 0.45,
     isOnlineWorkload: true,
     recommendedQuant: "FP8",
@@ -319,10 +319,10 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
   },
   coding: {
     id: "coding",
-    name: "Code Copilot & IDE Autocomplete",
-    shortName: "Code Copilot",
+    name: "Coding Assistant",
+    shortName: "Coding assistant",
     description:
-      "Latency-critical IDE assistant needing high LiveCodeBench accuracy, sub-350ms TTFT, and 50+ tok/s decode speed.",
+      "IDE autocomplete, debugging, and multi-file code generation.",
     promptTokens: 2048,
     p95PromptTokens: 4096,
     outputTokens: 512,
@@ -330,7 +330,7 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     concurrency: 16,
     targetTtftMs: 350,
     targetTpotTokPerSec: 50,
-    minQualityBar: 68,
+    minQualityBar: 70,
     prefixCacheHitRate: 0.5,
     isOnlineWorkload: true,
     recommendedQuant: "FP8",
@@ -344,10 +344,10 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
   },
   agentic: {
     id: "agentic",
-    name: "Multi-Step Agents & Tool Calling",
-    shortName: "Agents & Tools",
+    name: "AI Agents & Tool Calling",
+    shortName: "AI agents",
     description:
-      "Multi-turn agentic loops with heavy prefix reuse (65% cache hit) and long reasoning/tool-call output chains.",
+      "Multi-step reasoning workflows that call APIs, browse data, and plan tasks.",
     promptTokens: 4096,
     p95PromptTokens: 8192,
     outputTokens: 1536,
@@ -355,7 +355,7 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     concurrency: 10,
     targetTtftMs: 1200,
     targetTpotTokPerSec: 40,
-    minQualityBar: 74,
+    minQualityBar: 76,
     prefixCacheHitRate: 0.65,
     isOnlineWorkload: true,
     recommendedQuant: "FP8",
@@ -369,10 +369,10 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
   },
   summarization: {
     id: "summarization",
-    name: "Document Summarization & Synthesis",
+    name: "Document Summarization",
     shortName: "Summarization",
     description:
-      "Long input documents (8K tokens) distilled into structured 600-token executive briefs.",
+      "Condense long reports, transcripts, and articles into structured briefs.",
     promptTokens: 8192,
     p95PromptTokens: 16384,
     outputTokens: 640,
@@ -380,7 +380,7 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     concurrency: 16,
     targetTtftMs: 2000,
     targetTpotTokPerSec: 25,
-    minQualityBar: 65,
+    minQualityBar: 68,
     prefixCacheHitRate: 0.2,
     isOnlineWorkload: true,
     recommendedQuant: "FP8",
@@ -394,10 +394,10 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
   },
   batch: {
     id: "batch",
-    name: "Offline Batch Processing & ETL",
-    shortName: "Batch Offline",
+    name: "Batch Processing",
+    shortName: "Batch processing",
     description:
-      "Throughput-bound offline extraction & classification using high batch concurrency (64+) to minimize $/1M tokens.",
+      "Offline classification, extraction, and tagging across thousands of rows.",
     promptTokens: 2048,
     p95PromptTokens: 4096,
     outputTokens: 256,
@@ -405,7 +405,7 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     concurrency: 64,
     targetTtftMs: 6000,
     targetTpotTokPerSec: 12,
-    minQualityBar: 58,
+    minQualityBar: 62,
     prefixCacheHitRate: 0.5,
     isOnlineWorkload: false,
     recommendedQuant: "INT4",
@@ -419,10 +419,10 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
   },
   vision: {
     id: "vision",
-    name: "Multimodal Vision & OCR Extraction",
-    shortName: "Vision / VLM",
+    name: "Vision & Document OCR",
+    shortName: "Vision / OCR",
     description:
-      "High-resolution image + document token prefill with structured JSON output extraction.",
+      "Extract structured data from images, charts, receipts, and scanned PDFs.",
     promptTokens: 3072,
     p95PromptTokens: 6144,
     outputTokens: 512,
@@ -430,7 +430,7 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     concurrency: 12,
     targetTtftMs: 1000,
     targetTpotTokPerSec: 30,
-    minQualityBar: 64,
+    minQualityBar: 66,
     prefixCacheHitRate: 0.25,
     isOnlineWorkload: true,
     recommendedQuant: "FP8",
@@ -443,6 +443,13 @@ export const USE_CASE_PRESETS: Record<UseCaseId, UseCasePreset> = {
     },
   },
 };
+
+export function getQualityBarDescription(score: number): string {
+  if (score >= 76) return "Frontier-grade reasoning & complex coding";
+  if (score >= 70) return "Strong accuracy for production RAG & code";
+  if (score >= 64) return "Good enough for everyday chat & support";
+  return "Lightweight tier for simple extraction & tagging";
+}
 
 export const OPEN_SOURCE_MODELS: LLMModelSpec[] = [
   {
@@ -1599,8 +1606,8 @@ export function simulateDeployment(
       )
     : 0;
 
-  // FUTBIN 1-99 Stats
-  const statInt = Math.min(99, Math.max(45, Math.round(useCaseQualityScore * 1.04)));
+  // FUTBIN 1-99 Stats (statInt uses exact 1:1 scale with useCaseQualityScore)
+  const statInt = Math.min(99, Math.max(40, Math.round(useCaseQualityScore)));
   const statSpd = Math.min(
     99,
     Math.max(35, Math.round(40 + Math.min(59, (tpotTokPerSec / 95) * 59)))
@@ -1816,4 +1823,64 @@ export function runFullMatrixSimulation(
     }
     return b.scores.overallMatchScore - a.scores.overallMatchScore;
   });
+}
+
+const HF_REPO_MAP: Record<string, string> = {
+  "llama-3.1-8b": "meta-llama/Llama-3.1-8B-Instruct",
+  "qwen-2.5-7b": "Qwen/Qwen2.5-7B-Instruct",
+  "qwen-2.5-14b": "Qwen/Qwen2.5-14B-Instruct",
+  "mistral-small-24b": "mistralai/Mistral-Small-24B-Instruct-2501",
+  "gemma-2-27b": "google/gemma-2-27b-it",
+  "qwen-2.5-coder-32b": "Qwen/Qwen2.5-Coder-32B-Instruct",
+  "deepseek-r1-32b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+  "llama-3.3-70b": "meta-llama/Llama-3.3-70B-Instruct",
+  "qwen-2.5-72b": "Qwen/Qwen2.5-72B-Instruct",
+  "deepseek-r1-70b": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+  "mixtral-8x22b": "mistralai/Mixtral-8x22B-Instruct-v0.1",
+  "llama-3.1-405b": "meta-llama/Llama-3.1-405B-Instruct",
+};
+
+export function buildDeployCli(
+  selected: SimulationResult,
+  config: WorkloadConfig,
+  engineOverride?: ServingEngineId
+): string {
+  const engine = engineOverride || selected.servingEngine;
+  const repoId = HF_REPO_MAP[selected.model.id] || selected.model.name;
+  const maxLen = Math.min(
+    selected.model.maxContextLength,
+    Math.max(4096, config.p95PromptTokens + config.p95OutputTokens)
+  );
+
+  const prefixFlagVllm =
+    config.prefixCacheHitRate > 0 ? " \\\n  --enable-prefix-caching" : "";
+  const specFlagVllm = config.speculativeDecoding
+    ? " \\\n  --speculative-model [ngram] --num-speculative-tokens 5"
+    : "";
+  const loraFlagVllm =
+    config.fineTuneMode !== "none"
+      ? " \\\n  --enable-lora --max-loras 4 --max-lora-rank 64"
+      : "";
+
+  const quantFlagVllm =
+    selected.quantization === "FP8"
+      ? "--quantization fp8 --kv-cache-dtype fp8"
+      : selected.quantization === "INT8"
+      ? "--quantization smoothquant --kv-cache-dtype fp8"
+      : selected.quantization === "INT4"
+      ? "--quantization awq_marlin --kv-cache-dtype fp8"
+      : selected.quantization === "FP4"
+      ? "--quantization fp4 --kv-cache-dtype fp8"
+      : "--dtype bfloat16";
+
+  if (engine === "vllm") {
+    return `vllm serve ${repoId} \\\n  --tensor-parallel-size ${selected.gpuCount} \\\n  ${quantFlagVllm} \\\n  --max-model-len ${maxLen} \\\n  --enable-chunked-prefill${prefixFlagVllm}${specFlagVllm}${loraFlagVllm} \\\n  --gpu-memory-utilization 0.90`;
+  }
+  if (engine === "sglang") {
+    return `python3 -m sglang.launch_server --model-path ${repoId} \\\n  --tp ${selected.gpuCount} \\\n  --context-length ${maxLen} \\\n  --kv-cache-dtype fp8_e5m2 \\\n  --chunked-prefill-size 8192 \\\n  --mem-fraction-static 0.88`;
+  }
+  if (engine === "trtllm") {
+    return `trtllm-build --checkpoint_dir ./ckpt_${selected.model.id} \\\n  --tp_size ${selected.gpuCount} --use_fp8_context_fmha enable \\\n  --use_paged_context_fmha enable --max_num_tokens ${maxLen}`;
+  }
+  return `./llama-server -m ${selected.model.id}-${selected.quantization.toLowerCase()}.gguf \\\n  -ngl 999 -c ${maxLen} -np ${config.concurrency} --flash-attn --cont-batching`;
 }
