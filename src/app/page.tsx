@@ -64,6 +64,15 @@ function modelSizeWord(billions: number): string {
   return "a very large, top-tier";
 }
 
+/** Keep only the strengths a non-technical reader can understand. */
+function plainStrengths(strengths: string[]): string {
+  const techy = /license|\bfp\d|\bint\d|\d+x\b|\bgpu\b|vram|\bgb\b|moe|gqa|mla|token|quant/i;
+  const plain = strengths.filter((s) => !techy.test(s)).slice(0, 3);
+  return plain.length > 0
+    ? `being ${plain.map((s) => s.toLowerCase()).join(", ")}`
+    : "being a well-rounded all-purpose model";
+}
+
 function fmtMoney(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
 }
@@ -649,7 +658,7 @@ export default function InferenceDashboardPage() {
                 {overrideId ? "Option you picked" : "Our recommendation"}
               </span>
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
-                Use <span className="text-blue-600">{shown.model.shortName}</span>
+                Use <span className="text-blue-600">{shown.model.shortName}</span>{" "}
                 <span className="block text-xl sm:text-2xl font-medium text-zinc-600 mt-1">
                   on {shown.gpuCount === 1 ? "one" : shown.gpuCount} rented {shown.gpu.shortName}{" "}
                   {shown.gpuCount === 1 ? "graphics card" : "graphics cards"}
@@ -676,7 +685,7 @@ export default function InferenceDashboardPage() {
                     <p className="text-sm text-zinc-600 leading-relaxed">
                       {modelSizeWord(shown.model.totalParamsB)} AI model made by {shown.model.provider}, which you
                       download and run yourself. It&apos;s known for{" "}
-                      {shown.model.strengths.slice(0, 3).join(", ").toLowerCase()}.{" "}
+                      {plainStrengths(shown.model.strengths)}.{" "}
                       {shown.model.commercialUse
                         ? `You can use it in a business (${shown.model.license} license).`
                         : `Check the ${shown.model.license} license before using it commercially.`}
